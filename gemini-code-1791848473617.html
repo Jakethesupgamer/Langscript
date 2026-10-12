@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Langscript Browser CDN Demo</title>
+</head>
+<body>
+  <h1>Langscript v0.1.1 Browser Demo</h1>
+  <button id="action-btn">Click Me</button>
+
+  <!-- Load Langscript CDN Bundle -->
+  <script src="langscript.js"></script>
+
+  <!-- Write Langscript directly inside the page -->
+  <script type="text/langscript">
+    app WebApp
+
+      fn run():
+        print "Langscript web app successfully booted!"
+        wait 1
+        print "Timer tick completed."
+
+        if math random > 5:
+          print "High random roll achieved."
+        else:
+          print "Low random roll achieved."
+
+      "action-btn" clicked?:
+        print "Button clicked via browser DOM event listener!"
+
+      sense "hero" near "exit":
+        print "Hero approached the exit zone."
+        "open" => "door"
+  </script>
+</body>
+</html>
