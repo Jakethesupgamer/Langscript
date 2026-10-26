@@ -1,17 +1,16 @@
 /**
- * Langscript v0.1.1 Browser Bundle
- * Transpiles and executes .ls script tags directly in the browser.
+ * Langscript v0.1.2 Browser Bundle
+ * State assignment (name = value), put <expr> in "id", fixed constructor init.
+ * Transpiles and executes script[type="text/langscript"] in the browser.
  */
 (function () {
   'use strict';
 
-  // --- 1. PARSER & AST (From parse.ts) ---
   class Parser {
     constructor(source) {
       this.lines = [];
       this.current = 0;
       this.errors = [];
-
       const rawLines = source.split(/\r?\n/);
       rawLines.forEach((raw, idx) => {
         const trimmed = raw.trim();
@@ -46,7 +45,6 @@
     parseBlock(parentIndent) {
       const body = [];
       const firstInBlock = this.peek();
-
       if (!firstInBlock || firstInBlock.indent <= parentIndent) {
         if (firstInBlock) {
           this.errors.push({
@@ -56,20 +54,17 @@
         }
         return body;
       }
-
       const blockIndent = firstInBlock.indent;
       while (this.peek() && this.peek().indent === blockIndent) {
         const node = this.parseStatement(blockIndent);
         if (node) body.push(node);
       }
-
       return body;
     }
 
     parseStatement(currentIndent) {
       const line = this.peek();
       if (!line) return null;
-
       const text = line.text;
       const lNo = line.lineNumber;
 
@@ -83,13 +78,11 @@
       if (text.startsWith('fn ')) {
         this.advance();
         const rest = text.substring(3).replace(/:$/, '').trim();
-
         if (rest.startsWith('"') && rest.endsWith('"')) {
           const idName = rest.slice(1, -1);
           const body = this.parseBlock(line.indent);
           return { type: 'EventHandlerNode', targetType: 'id', target: idName, body };
         }
-
         const match = rest.match(/^([a-zA-Z0-9_]+)\((.*)\)$/);
         if (match) {
           const name = match[1];
@@ -98,21 +91,38 @@
           const hasWait = JSON.stringify(body).includes('WaitNode');
           return { type: 'FnNode', name, params, isAsync: hasWait, body };
         }
-
         this.errors.push({ line: lNo, message: `Invalid function signature: "${text}"` });
         return null;
       }
 
       if (text.startsWith('return')) {
         this.advance();
-        const expression = text.substring(6).trim();
-        return { type: 'ReturnNode', expression: this.parseMathExpr(expression) };
+        return { type: 'ReturnNode', expression: this.parseMathExpr(text.substring(6).trim()) };
       }
 
       if (text.startsWith('print ')) {
         this.advance();
-        const expression = text.substring(6).trim();
-        return { type: 'PrintNode', expression: this.parseMathExpr(expression) };
+        return { type: 'PrintNode', expression: this.parseMathExpr(text.substring(6).trim()) };
+      }
+
+      if (text.startsWith('put ')) {
+        this.advance();
+        const rest = text.substring(4).trim();
+        const inIndex = rest.lastIndexOf(' in ');
+        if (inIndex !== -1) {
+          const exprRaw = rest.substring(0, inIndex).trim();
+          const targetRaw = rest.substring(inIndex + 4).trim().replace(/^"|"$/g, '');
+          return {
+            type: 'PutNode',
+            expression: this.parseMathExpr(exprRaw),
+            targetId: targetRaw,
+          };
+        }
+        this.errors.push({
+          line: lNo,
+          message: `Invalid put syntax: "${text}". Expected: put <expr> in "element-id"`,
+        });
+        return null;
       }
 
       if (text.startsWith('if ')) {
@@ -121,20 +131,23 @@
         const thenBody = this.parseBlock(line.indent);
         const elseIfs = [];
         let elseBody = undefined;
-
         while (this.peek() && this.peek().text.startsWith('else if ')) {
           const elifLine = this.advance();
           const elifCond = elifLine.text.substring(8).replace(/:$/, '').trim();
           const elifBody = this.parseBlock(elifLine.indent);
           elseIfs.push({ condition: this.parseMathExpr(elifCond), body: elifBody });
         }
-
         if (this.peek() && (this.peek().text === 'else' || this.peek().text === 'else:')) {
           const elseLine = this.advance();
           elseBody = this.parseBlock(elseLine.indent);
         }
-
-        return { type: 'IfNode', condition: this.parseMathExpr(cond), thenBody, elseIfs, elseBody };
+        return {
+          type: 'IfNode',
+          condition: this.parseMathExpr(cond),
+          thenBody,
+          elseIfs,
+          elseBody,
+        };
       }
 
       if (text.startsWith('wait ')) {
@@ -169,12 +182,10 @@
         const targetStr = text.replace('clicked?', '').replace(/:$/, '').trim();
         let targetType = 'id';
         let target = targetStr.replace(/^"|"$/g, '');
-
         if (targetStr.startsWith('key ')) {
           targetType = 'key';
           target = targetStr.substring(4).replace(/^"|"$/g, '').trim();
         }
-
         const body = this.parseBlock(line.indent);
         return { type: 'EventHandlerNode', targetType, target, body };
       }
@@ -187,20 +198,22 @@
 
       if (text.startsWith('let ') && text.endsWith('forward')) {
         this.advance();
-        const entity = text.replace(/^let\s+/, '').replace(/\s+forward$/, '').trim().replace(/^"\vert{}"$/g, '');
+        const entity = text
+          .replace(/^let\s+/, '')
+          .replace(/\s+forward$/, '')
+          .trim()
+          .replace(/^"|"$/g, '');
         return { type: 'MovementNode', entity, direction: 'forward' };
       }
 
       if (text.startsWith('sense ')) {
         this.advance();
         const rest = text.substring(6).replace(/:$/, '').trim();
-
         if (rest.includes(' near ')) {
           const parts = rest.split(' near ').map((s) => s.trim().replace(/^"|"$/g, ''));
           const body = this.parseBlock(line.indent);
           return { type: 'RelationNode', subject: parts[0], relation: 'near', object: parts[1], body };
         }
-
         const target = rest.replace(/^"|"$/g, '');
         const body = this.parseBlock(line.indent);
         return { type: 'SenseNode', target, body };
@@ -210,9 +223,22 @@
         this.advance();
         const isNear = text.includes(' near ');
         const rel = isNear ? 'near' : 'far';
-        const parts = text.replace(/:$/, '').split(` ${rel} `).map((s) => s.trim().replace(/^"|"$/g, ''));
+        const parts = text
+          .replace(/:$/, '')
+          .split(` ${rel} `)
+          .map((s) => s.trim().replace(/^"|"$/g, ''));
         const body = this.parseBlock(line.indent);
         return { type: 'RelationNode', subject: parts[0], relation: rel, object: parts[1], body };
+      }
+
+      const assignMatch = text.match(/^([a-zA-Z0-9_]+)\s*=\s*(.+)$/);
+      if (assignMatch) {
+        this.advance();
+        return {
+          type: 'AssignmentNode',
+          name: assignMatch[1],
+          expression: this.parseMathExpr(assignMatch[2]),
+        };
       }
 
       this.advance();
@@ -230,14 +256,24 @@
     }
   }
 
-  // --- 2. CODE EMITTER (From emit.ts with v0.1.1 auto-call) ---
   class CodeEmitter {
     constructor() {
       this.indentLevel = 0;
+      this.stateVars = new Set();
     }
 
     pad() {
       return '  '.repeat(this.indentLevel);
+    }
+
+    bindStateVars(expr) {
+      if (!expr) return expr;
+      let out = expr;
+      this.stateVars.forEach((v) => {
+        const regex = new RegExp(`\\b(?!this\\.)(${v})\\b`, 'g');
+        out = out.replace(regex, `this.$1`);
+      });
+      return out;
     }
 
     emitNodes(nodes) {
@@ -247,11 +283,24 @@
     emitNode(node) {
       switch (node.type) {
         case 'AppNode': {
-          let code = `${this.pad()}class ${node.name} {\n`;
-          this.indentLevel++;
+          this.stateVars.clear();
+          const collect = (list) => {
+            list.forEach((n) => {
+              if (n.type === 'AssignmentNode') this.stateVars.add(n.name);
+              if (n.body) collect(n.body);
+              if (n.thenBody) collect(n.thenBody);
+              if (n.elseBody) collect(n.elseBody);
+              if (n.elseIfs) n.elseIfs.forEach((e) => collect(e.body));
+            });
+          };
+          collect(node.body);
 
+          // Only FnNode is a method. Everything else → constructor()
           const methods = node.body.filter((n) => n.type === 'FnNode');
           const initStatements = node.body.filter((n) => n.type !== 'FnNode');
+
+          let code = `${this.pad()}class ${node.name} {\n`;
+          this.indentLevel++;
 
           if (initStatements.length > 0) {
             code += `${this.pad()}constructor() {\n`;
@@ -265,12 +314,21 @@
           this.indentLevel--;
           code += `${this.pad()}}\n\n`;
 
-          // v0.1.1 Safe method auto-invocation
           code += `${this.pad()}const __ls_app = new ${node.name}();\n`;
           code += `${this.pad()}if (typeof __ls_app.run === 'function') __ls_app.run();\n`;
           code += `${this.pad()}else if (typeof __ls_app.start === 'function') __ls_app.start();\n`;
           code += `${this.pad()}else if (typeof __ls_app.init === 'function') __ls_app.init();\n`;
           return code;
+        }
+
+        case 'AssignmentNode': {
+          const boundExpr = this.bindStateVars(node.expression);
+          return `${this.pad()}this.${node.name} = ${boundExpr};`;
+        }
+
+        case 'PutNode': {
+          const boundExpr = this.bindStateVars(node.expression);
+          return `${this.pad()}{ const __el = document.getElementById("${node.targetId}"); if (__el) __el.textContent = String(${boundExpr}); }`;
         }
 
         case 'FnNode': {
@@ -284,26 +342,24 @@
         }
 
         case 'ReturnNode':
-          return `${this.pad()}return ${node.expression};`;
+          return `${this.pad()}return ${this.bindStateVars(node.expression)};`;
 
         case 'PrintNode':
-          return `${this.pad()}console.log(${node.expression});`;
+          return `${this.pad()}console.log(${this.bindStateVars(node.expression)});`;
 
         case 'IfNode': {
-          let code = `${this.pad()}if (${node.condition}) {\n`;
+          let code = `${this.pad()}if (${this.bindStateVars(node.condition)}) {\n`;
           this.indentLevel++;
           code += this.emitNodes(node.thenBody);
           this.indentLevel--;
           code += `\n${this.pad()}}`;
-
           node.elseIfs.forEach((elif) => {
-            code += ` else if (${elif.condition}) {\n`;
+            code += ` else if (${this.bindStateVars(elif.condition)}) {\n`;
             this.indentLevel++;
             code += this.emitNodes(elif.body);
             this.indentLevel--;
             code += `\n${this.pad()}}`;
           });
-
           if (node.elseBody && node.elseBody.length > 0) {
             code += ` else {\n`;
             this.indentLevel++;
@@ -311,7 +367,6 @@
             this.indentLevel--;
             code += `\n${this.pad()}}`;
           }
-
           return code + '\n';
         }
 
@@ -336,7 +391,6 @@
             node.targetType === 'id' ? `document.getElementById("${cleanTarget}")` : `window`;
           const eventName =
             node.targetType === 'id' ? 'click' : cleanTarget === 'lmb' ? 'mousedown' : 'keydown';
-
           let code = `${this.pad()}${listenerTarget}?.addEventListener("${eventName}", async (e) => {\n`;
           if (node.targetType === 'key') {
             if (cleanTarget.toLowerCase() === 'space') {
@@ -361,7 +415,8 @@
           return `${this.pad()}moveEntityForward("${node.entity.replace(/^"|"$/g, '')}");`;
 
         case 'SenseNode': {
-          const targetClean = typeof node.target === 'string' ? node.target.replace(/^"|"$/g, '') : node.target;
+          const targetClean =
+            typeof node.target === 'string' ? node.target.replace(/^"|"$/g, '') : node.target;
           let code = `${this.pad()}setupSense("${targetClean}", async () => {\n`;
           this.indentLevel++;
           code += this.emitNodes(node.body);
@@ -385,20 +440,16 @@
     }
   }
 
-  // --- 3. COMPILER API & HOST STUBS ---
   function compile(lsSource) {
     const parser = new Parser(lsSource);
     const ast = parser.parse();
-
     if (parser.errors.length > 0) {
       return { js: '', errors: parser.errors };
     }
-
     const emitter = new CodeEmitter();
     const js = emitter.emitNodes(ast);
-
     return {
-      js: `// Generated by Langscript v0.1.1 Browser Compiler\n\n${js}`,
+      js: `// Generated by Langscript v0.1.2 Browser Compiler\n\n${js}`,
       errors: [],
     };
   }
@@ -417,7 +468,6 @@
     }
   }
 
-  // Browser Host Stubs
   window.applyEffect = function (effect, target) {
     console.log(`[Host Stub] Applying effect "${effect}" to target "${target}"`);
   };
@@ -433,10 +483,8 @@
     setTimeout(() => callback(), 200);
   };
 
-  // Expose Global API
   window.Langscript = { compile, run };
 
-  // --- 4. AUTO-LOADER (<script type="text/langscript">) ---
   async function bootLangscriptScripts() {
     const scripts = document.querySelectorAll('script[type="text/langscript"]');
     for (const script of scripts) {
