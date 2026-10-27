@@ -77,7 +77,6 @@ DEMO: Hello world
 
 after making a "<script> in html you MUST write the following down immediately
 
-```text
 app Hello
   fn run():
     print "hello from ls"
