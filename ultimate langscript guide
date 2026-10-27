@@ -75,6 +75,8 @@ Hosts may stub these with `console.log` in the browser bundle.
 
 DEMO: Hello world
 
+after making a "<script> in html you MUST write the following down immediately
+
 ```text
 app Hello
   fn run():
