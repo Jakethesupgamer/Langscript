@@ -15,12 +15,18 @@ i thought i would make that clear but let me know if i should change it to norma
 10. Variables use name = value
 
 
-legend for simplicity in times you see them:
-N: expects number output
-x: expected code continuing output
-A: variable example
-B: variable example
+legend for simplicity to the abosolute dummies:
 
+N : expects number output
+x : expected code continuing output
+A : variable example
+B : variable example
+"damage" : variable example
+"enemy" : variable example
+"player" : variable example
+"w" represents example with w key
+"space" respresents example with space key
+"lmb" represents example with left mouse button
 Vocabulary (upd2)
 
  Core
