@@ -1,0 +1,81 @@
+how to use/ translation to JS
+
+Core rules
+
+1. Indentation defines blocks (no `{ }` in source)
+2. Newlines end statements
+3. Strings use "double quotes".
+4. Time is in seconds (`wait 1`, `loop 2`) → emitted JS uses milliseconds
+5. Program starts with app Name
+6. On load, the engine creates the app and auto-calls `"run", "start", or init if present.
+7. print -> browser/Node Console (`console.log`)
+8. put … in "id" changes text on the page (element `id`).
+9. let`is for movement (`let "hero" forward`), NOT normal variables as 
+i thought i would make that clear but let me know if i should change it to normal
+10. Variables use name = value
+
+Vocabulary (upd1)
+
+ Core
+
+| Pattern | Meaning | JS idea |
+|---------|---------|--------|
+`app Name` | Program / class | `class Name { … }`
+`fn name(a, b):` | Function / method | `name(a, b) { … }`
+`return x` | Return | `return x;` |
+`print x` | Log to Console | `console.log(x)` 
+`id "btn"` | Remember a DOM id | `getElementByIdControl
+
+| Pattern | Meaning | JS idea |
+|---------|---------|--------|
+`if` / `else if` / `else` | Branches | `if / else if / else` 
+`wait N` | Pause N seconds | `await` + `setTimeout` 
+`loop N` | Every N seconds | `setInterval` 
+
+Math
+
+| Pattern | Meaning |
+|---------|--------|
+`math floor x` | Floor 
+math random` | Integer 0–9 
+math random+` | Integer 1–10 
+`math random * n` | Scale (float) 
+`math random / n` | Scale (float) 
+
+State & page text 
+
+| Pattern | Meaning | JS idea |
+|---------|---------|--------|
+| `score = 0` | Variable on the app | `this.score = 0` 
+| `score = score + 1` | Update | `this.score = this.score + 1` 
+| `put score in "score-label"` | Show on page | `element.textContent = …
+| `put "hello" in "out"` | Set text to a string | same 
+
+Events
+
+ `"btn" clicked?:` | Click on element `id="btn"` 
+ `fn "btn"` | Alias for click on `btn` 
+ `key "w" clicked?:` | Key W 
+ `key "space" clicked?:` | Space bar 
+ `key "lmb" clicked?:` | Left mouse button 
+
+Effects & sensing (host hooks)
+
+| Pattern | Emits (idea) |
+|---------|----------------|
+"damage" => "enemy"` | `applyEffect("damage", "enemy")` 
+let "player" forward` | `moveEntityForward("player")` 
+sense cursor` / `sense "npc"` | `setupSense(…)` 
+sense "a" near "b"` / `"a" far "b"` | `setRelation(…)` 
+
+Hosts may stub these with `console.log` in the browser bundle.
+
+
+
+
+DEMO: Hello world
+
+```text
+app Hello
+  fn run():
+    print "hello from ls"
