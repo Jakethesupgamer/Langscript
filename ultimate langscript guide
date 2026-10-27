@@ -32,6 +32,7 @@ Vocabulary (upd1)
 `return x` | Return | `return x;` |
 `print x` | Log to Console | `console.log(x)` 
 `id "btn"` | Remember a DOM id | `getElementByIdControl
+ class "btn" | getElementByClassName
 
 | Pattern | Meaning | JS idea |
 |---------|---------|--------|
